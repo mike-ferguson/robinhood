@@ -1,10 +1,15 @@
+# Author: Mike Ferguson
+# Version 1.0
+#
+#
+# Python Robinhood SHort Term Trading API
+
+
 import robin_stocks
 import pprint
 import pandas as pd
 import schedule
 import time
-
-from pandas import HDFStore
 
 total_profits = []
 
@@ -20,9 +25,7 @@ def check_stock_prices(dataframe):
         bought_price = float(row["Price"])
         updated_price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
         print("Stock: ", symbol, "-----", updated_price, "-----", compare_prices(bought_price, updated_price))
-
         profit, stock_was_sold = make_decision(updated_price, bought_price, symbol, shares)
-
         if stock_was_sold:
             total_profits.append(profit)
             row_to_delete = df[df['Stock'] == symbol].index
@@ -85,8 +88,8 @@ while to_end is False:
     if mode == "q":
         to_end = True
     print("--------------------------------------------------------")
-    # import stocks buying and amount here. Parses Text file to automatically buy stock and quantity
 
+    # import stocks buying and amount here. Parses Text file to automatically buy stock and quantity
     stock_file = open("stocks.txt", "r")
     stock_names = []
     stock_quantities = []
@@ -95,9 +98,7 @@ while to_end is False:
         stock_list.append(stock.split())
         stock_names.append(stock.split()[0])
         stock_quantities.append(float(stock.split()[1]))
-
     df = pd.DataFrame(stock_names, columns=['Stock'])
-
     name_list = []
     price_list = []
     for stock in stock_list:
@@ -107,24 +108,18 @@ while to_end is False:
         name_list.append(full_name)
         price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
         price_list.append(price)
-
     df['Full Name'] = name_list
     df['Price'] = price_list
     df['Quantity'] = stock_quantities
-
     if mode.lower() == "b":
         print("Entered Buy Mode.")
         print("Reading in Order from txt file...")
         print("Order Input:")
-
         df['Total Order Amount'] = round(df['Price'] * df['Quantity'], 3)
-
         total_investment = round(df['Total Order Amount'].sum(), 2)
         expected_roi = round(.05 * total_investment, 2)
         total_expected_end = round(total_investment + expected_roi, 2)
-
         df["% Order Makeup"] = round(((df["Total Order Amount"] / total_investment) * 100), 4)
-
         pd.set_option('display.max_columns', None)
         pd.set_option('display.width', None)
         print("--------------------------------------------------------\n", df)
@@ -133,7 +128,6 @@ while to_end is False:
         print("Expected ROI (5%): ", expected_roi)
         print("Total Expected End: ", total_expected_end)
         print("--------------------------------------------------------")
-
         stocks_left = df.shape[0]
 
         # ----------------------------------------------------------------------------------------------------------------------
@@ -146,7 +140,7 @@ while to_end is False:
         #     print("Order Total: ", total_investment)
         #     difference = round(total_investment - buying_power, 2)
         #     print("Funds Needed: ", difference)
-        #else:
+        # else:
         if is_correct.lower() == "y":
             print("Placing Order...")
             for index, row in df.iterrows():
@@ -160,7 +154,7 @@ while to_end is False:
         print("--------------------------------------------------------")
 
 
-    # STATUS MODE: PULLS THE STOCKS BOUGHT AND THEIR INCREASE/DECREASE
+    # Status Mode: Pulls Current Stock Prices and Info:
     elif mode == "s":
         print("Entered Status Mode.")
         df_old = pd.read_pickle("stocks_bought.txt")
@@ -168,8 +162,6 @@ while to_end is False:
         total_investment = round(df_old['Total Order Amount'].sum(), 3)
         expected_roi = round(.05 * total_investment, 2)
         total_expected_end = round(total_investment + expected_roi, 2)
-
-
         new_prices = []
         movement = []
         magnitude = []
@@ -189,19 +181,12 @@ while to_end is False:
             mag_percent.append(percent)
             dollars = round(result * shares, 2)
             dollars_changed.append(dollars)
-
-
-
         df_old['New Price'] = new_prices
         df_old['Movement'] = movement
         df_old['How Much'] = magnitude
         df_old["How Much %"] = mag_percent
         df_old["Dollars Losed/Gained"] = dollars_changed
         df_old['New Total Worth'] = round(df_old['New Price'] * df_old['Quantity'], 2)
-
-
-
-
         t = time.localtime()
         current_time = time.strftime("%H:%M:%S", t)
         print("Time", current_time)
@@ -213,42 +198,34 @@ while to_end is False:
         print("Expected ROI (5%): ", expected_roi)
         print("Total Expected End: ", total_expected_end)
         print("--------------------------------------------------------")
-
-
-
         sum_new = round(df_old['New Total Worth'].sum(), 3)
         print("If sold now, you would have ", sum_new)
         instant_profit = round(sum_new - total_investment, 2)
         instant_ROI = round(instant_profit / total_investment, 4) * 100
-        print("Profit if all sold now:", instant_profit, "For an ROI of", round(instant_ROI,4), "percent")
+        print("Profit if all sold now:", instant_profit, "For an ROI of", round(instant_ROI, 4), "percent")
         print("--------------------------------------------------------")
-
-
 
     # Run mode. Starts when the market opens and ends when it closes. Refreshed every 5 seconds
     elif mode == "r":
-        # When market opens, check status of stock. If any stock are at 5% or higher, sell.
+        # When market opens, check status of stock. If any stock are at 5% or higher, sell. Can change this param.
         # If not, check again in 5 mins.
         print("Entered Run Mode.")
         stocks_left_bool = True
         schedule.every().day.at("09:00:00").do(refresh, df)
-
         start_time = time.time()
         while True:
             current_time = time.time()
             time_elapsed = start_time - current_time
             # makes sure the trader is between 9am and 6pm
-
             if time_elapsed < 32460 and stocks_left_bool:
-                # print("LEFT", stocks_left)
                 schedule.run_pending()
             else:
                 break
 
+    # Sell Mode: Sells off all Stocks previously bought and gives info.
     elif mode.lower() == "sell":
         confirm = input("Are you sure you want to sell all stock in txt file? (y)/(n)")
         if confirm.lower() == "y":
-
             print("Entered Sell Mode.")
             print("Liquidating all stocks in file...")
             time.sleep(2)
@@ -264,7 +241,7 @@ while to_end is False:
             dollars_changed = []
             new_worth = []
             for index, row in df_old.iterrows():
-                #robin_stocks.order_sell_market(row["Stock"], row['Quantity']) # UNCOMMENT TO ACTUALLY SELL!!!
+                # robin_stocks.order_sell_market(row["Stock"], row['Quantity']) # UNCOMMENT TO ACTUALLY SELL!!!
                 symbol = row['Stock']
                 shares = float(row["Quantity"])
                 bought_price = float(row["Price"])
@@ -282,14 +259,12 @@ while to_end is False:
                 new_worth.append(new_worth)
                 print("Sold", row['Quantity'], "shares of", row['Stock'], "at", updated_price, "for a total of",
                       new_total_worth)
-
             df_old['New Price'] = new_prices
             df_old['Movement'] = movement
             df_old['How Much'] = magnitude
             df_old["How Much %"] = mag_percent
             df_old["Dollars Losed/Gained"] = dollars_changed
             df_old['New Total Worth'] = round(df_old['New Price'] * df_old['Quantity'], 2)
-
             t = time.localtime()
             current_time = time.strftime("%H:%M:%S", t)
             print("Time", current_time)
@@ -301,19 +276,18 @@ while to_end is False:
             print("Expected ROI (5%): ", expected_roi)
             print("Total Expected End: ", total_expected_end)
             print("--------------------------------------------------------")
-
             sum_new = round(df_old['New Total Worth'].sum(), 3)
             print("Sold. You now have", sum_new)
             instant_profit = round(sum_new - total_investment, 2)
             instant_ROI = round(instant_profit / total_investment, 4) * 100
-            print("Profit: ", instant_profit, "For an ROI of", round(instant_ROI,4), "percent")
+            print("Profit: ", instant_profit, "For an ROI of", round(instant_ROI, 4), "percent")
             print("--------------------------------------------------------")
-
-
             print("Success! All Stocks Sold. Confirmation Email from Robinhood to follow.")
             print("--------------------------------------------------------")
         else:
             print("Sell Aborted")
+
+    # Quit Mode: Quits the Program
     elif mode == "q":
         print("Process Quit.")
         to_end = True
