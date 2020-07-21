@@ -21,7 +21,7 @@ total_profits = []
 
 # -----------------------------------------------------------------------------------------------------------------------
 # Function Definitions
-def check_stock_prices(dataframe):
+def check_stock_prices(df):
     print("Checking Stock Prices...")
     profits = []
     for index, row in df.iterrows():
@@ -34,7 +34,7 @@ def check_stock_prices(dataframe):
         if stock_was_sold:
             total_profits.append(profit)
             row_to_delete = df[df['Stock'] == symbol].index
-            dataframe = dataframe.drop(row_to_delete)
+            dataframe = df.drop(row_to_delete)
             global stocks_left_bool
             if dataframe.empty:
                 stocks_left_bool = False
@@ -76,6 +76,8 @@ def refresh(df):
 
 def check_status(txt_file):
     df_old = pd.read_pickle(txt_file)
+    #print(df_old)
+    #print("Checking Stocks Bought on " + df_old["Day Bought (Evening)"] + " Evening to sell on " + df_old["Day To Sell (Morning)"] + " morning...")
     df_old['Total Order Amount'] = round(df_old['Price'] * df_old['Quantity'], 2)
     total_investment = round(df_old['Total Order Amount'].sum(), 3)
     expected_roi = round(.05 * total_investment, 2)
@@ -126,10 +128,10 @@ def buy():
     # import stocks buying and amount here. Parses Text file to automatically buy stock and quantity
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', None)
-    what_day = input("What File do you want to read/save from? Old(o) or New (n)")
-    if what_day.lower() == "o":
+    what_day = input("What File do you want to read/save from? (1) or (2)")
+    if what_day.lower() == "1":
         stock_file = open("stocks_to_buy.txt", "r")
-    elif what_day.lower() == "n":
+    elif what_day.lower() == "2":
         stock_file = open("stocks_to_buy_2.txt", "r")
     stock_names = []
     stock_quantities = []
@@ -140,7 +142,7 @@ def buy():
         stock_quantities.append(float(stock.split()[1]))
     df = pd.DataFrame(stock_names, columns=['Stock'])
 
-    df_old = pd.read_pickle("stock_report.txt")
+    # df_old = pd.read_pickle("stocks_to_buy.txt")
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', None)
@@ -148,6 +150,8 @@ def buy():
     name_list = []
     price_list = []
     pred_profits = []
+    days = []
+    days2 = []
     for stock in stock_list:
         symbol = stock[0]
         quantity = stock[1]
@@ -155,9 +159,15 @@ def buy():
         name_list.append(full_name)
         price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
         price_list.append(price)
-        pred_profit = df_old.loc[df_old.Stock == symbol,'Predicted Profit'].tolist()[0]
+        #pred_profit = df_old.loc[df_old.Stock == symbol,'Predicted Profit'].tolist()[0]
         # print("pred Profit", pred_profit)
-        pred_profits.append(pred_profit)
+        #pred_profits.append(pred_profit)
+        tomorrow = date.today() + timedelta(1)
+        yesterday = date.today() - timedelta(1)
+        tomorrow_name = calendar.day_name[tomorrow.weekday()]
+        yesterday_name = calendar.day_name[yesterday.weekday()]
+        days.append(yesterday_name)
+        days2.append(tomorrow_name)
     df['Full Name'] = name_list
     df['Price'] = price_list
     df['Quantity'] = stock_quantities
@@ -170,9 +180,12 @@ def buy():
     expected_roi = round(.05 * total_investment, 2)
     total_expected_end = round(total_investment + expected_roi, 2)
     df["% Order Makeup"] = round(((df["Total Order Amount"] / total_investment) * 100), 4)
-    df["Predicted Profit/Share"] = pred_profits
-    df["Predicted Profit Total"] = round(pred_profits * df['Quantity'], 3)
-    total_pred_profit = round(df["Predicted Profit Total"].sum(), 2)
+
+    df["Day Bought (Evening)"] = days
+    df["Day To Sell (Morning)"] = days2
+    #df["Predicted Profit/Share"] = pred_profits
+    #df["Predicted Profit Total"] = round(pred_profits * df['Quantity'], 3)
+    #total_pred_profit = round(df["Predicted Profit Total"].sum(), 2)
 
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', None)
@@ -181,7 +194,7 @@ def buy():
     print("Total Investment: ", total_investment)
     print("Expected ROI (5%): ", expected_roi)
     print("Total Expected End: ", total_expected_end)
-    print("Total Predicted Profit: ", total_pred_profit)
+    #print("Total Predicted Profit: ", total_pred_profit)
     print("--------------------------------------------------------")
     stocks_left = df.shape[0]
 
@@ -189,36 +202,37 @@ def buy():
 
     # confirm and place order
     is_correct = input("\nConfirm Order? y/n")
-    # if total_investment > buying_power:
-    #     print("Unable to complete, you do not have enough buying power.")
-    #     print("Buying Power: ", buying_power)
-    #     print("Order Total: ", total_investment)
-    #     difference = round(total_investment - buying_power, 2)
-    #     print("Funds Needed: ", difference)
-    #else:
-    if is_correct.lower() == "y":
-        print("Placing Order...")
-        for index, row in df.iterrows():
-            # robin_stocks.order_buy_market(row["Stock"], row['Quantity']) # UNCOMMENT TO ACTUALLY BUY!!!
-            print("Bought", row['Quantity'], "shares of", row['Stock'], "for a total of",
-                  row['Total Order Amount'])
-        print("Success! Order Placed. Confirmation Email from Robinhood to follow.")
+    if total_investment > buying_power:
+        print("Unable to complete, you do not have enough buying power.")
+        print("Buying Power: ", buying_power)
+        print("Order Total: ", total_investment)
+        difference = round(total_investment - buying_power, 2)
+        print("Funds Needed: ", difference)
+    else:
+        if is_correct.lower() == "y":
+            print("Placing Order...")
+            for index, row in df.iterrows():
+                time.sleep(2)
+                # robin_stocks.order_buy_market(row["Stock"], row['Quantity']) # UNCOMMENT TO ACTUALLY BUY!!!
+                print("Bought", row['Quantity'], "shares of", row['Stock'], "for a total of",
+                      row['Total Order Amount'])
+            print("Success! Order Placed. Confirmation Email from Robinhood to follow.")
 
-        if what_day.lower() == "o":
-            df.to_pickle("stocks_bought.txt")  # where to save it, usually as a .pkl
-        elif what_day.lower() == "n":
-            df.to_pickle("stocks_bought2.txt")  # where to save it, usually as a .pkl
+            if what_day.lower() == "1":
+                df.to_pickle("stocks_bought.txt")  # where to save it, usually as a .pkl
+            elif what_day.lower() == "2":
+                df.to_pickle("stocks_bought2.txt")  # where to save it, usually as a .pkl
 
         else:
             print('Unable to Confirm; Order Aborted.')
     print("--------------------------------------------------------")
 
 def sell():
-    what_day = input("What File do you want to read/save from? Old(o) or New (n)")
-    if what_day.lower() == "o":
+    what_day = input("What File do you want to read/save from? (1) or (2)")
+    if what_day.lower() == "1":
         df_old = pd.read_pickle("stocks_bought.txt")
         confirm = input("Are you sure you want to sell all stock in  ** OLD ** txt file? (y)/(n)")
-    elif what_day.lower() == "n":
+    elif what_day.lower() == "2":
         confirm = input("Are you sure you want to sell all stock in  ** NEW ** txt file? (y)/(n)")
         df_old = pd.read_pickle("stocks_bought2.txt")
     else:
@@ -239,6 +253,7 @@ def sell():
         dollars_changed = []
         new_worth = []
         for index, row in df_old.iterrows():
+            time.sleep(2)
             # robin_stocks.order_sell_market(row["Stock"], row['Quantity']) # UNCOMMENT TO ACTUALLY SELL!!!
             symbol = row['Stock']
             shares = float(row["Quantity"])
@@ -257,6 +272,7 @@ def sell():
             new_worth.append(new_worth)
             print("Sold", row['Quantity'], "shares of", row['Stock'], "at", updated_price, "for a total of",
                   new_total_worth)
+
         df_old['New Price'] = new_prices
         df_old['Movement'] = movement
         df_old['How Much'] = magnitude
@@ -309,24 +325,17 @@ while to_end is False:
     # Status Mode: Pulls Current Stock Prices and Info:
     elif mode.lower() == "s":
         print("Entered Status Mode.")
-        my_date = date.today()
-        tomorrow = date.today() + timedelta(1)
-        yesterday = date.today() - timedelta(1)
-        two_days = date.today() + timedelta(2)
-        day = calendar.day_name[my_date.weekday()]
-        tomorrow_name = calendar.day_name[tomorrow.weekday()]
-        yesterday_name = calendar.day_name[yesterday.weekday()]
-        two_days_name = calendar.day_name[two_days.weekday()]
+        # my_date = date.today()
+        # day = calendar.day_name[my_date.weekday()]
+        # two_days = date.today() + timedelta(2)
+        # two_days_name = calendar.day_name[two_days.weekday()]
+        #
+        # if day == "Saturday" or day == "Sunday":
+        #     yesterday_name = "Friday"
+        #     tomorrow_name = "Tuesday"
+        #     two_days_name = "Wednesday"
 
-        if day == "Saturday" or day == "Sunday":
-            yesterday_name = "Friday"
-            tomorrow_name = "Tuesday"
-            two_days_name = "Wednesday"
-
-        print("Checking Stocks Bought on " + yesterday_name + " Evening to sell on " + tomorrow_name + " morning...")
         check_status("stocks_bought.txt")
-
-        print("Checking Stocks Bought on " + day + " Evening to sell on " + two_days_name + " morning...")
         check_status("stocks_bought2.txt")
 
     # Run mode. Starts when the market opens and ends when it closes. Refreshed every 5 seconds
