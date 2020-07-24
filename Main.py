@@ -2,8 +2,8 @@
 # Version 1.0
 #
 #
-# Python Robinhood SHort Term Trading API
-
+# Python Robinhood Short Term Trading API
+import math
 
 import robin_stocks
 import pprint
@@ -14,6 +14,10 @@ import time
 
 from datetime import date, timedelta
 import calendar
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_rows', None)
 
 
 total_profits = []
@@ -55,6 +59,26 @@ def compare_prices(bought_price, current_price):
     else:
         return "UP", difference
 
+def get_stock_info(stock):
+    results = robin_stocks.account.build_holdings(False)
+    status_all = pd.DataFrame.from_dict(results)
+
+    stock_info = status_all
+    try:
+        stock_info = status_all[stock]
+    except KeyError as e:
+        print("You have not bought", stock, "yet. Please Quit and Try again.")
+        return float('nan'), float('nan'),float('nan'),float('nan'),float('nan'),float('nan'),float('nan')
+
+    current_price = float(stock_info.iloc[0])
+    shares = float(stock_info.iloc[1])
+    buy_price = float(stock_info.iloc[2])
+    total_investment = round(shares * buy_price, 2)
+    new_total = round(shares * current_price, 2)
+    profit = round(new_total - total_investment, 2)
+    percent_profit = round((profit / total_investment) * 100, 2)
+    return current_price, buy_price, shares, profit, percent_profit, total_investment, new_total
+
 
 def make_decision(current_price, bought_price, stock, shares, ):
     percent_gain = (current_price - bought_price) / bought_price * 100
@@ -75,64 +99,71 @@ def refresh(df):
     schedule.every(.1666667).minutes.do(check_stock_prices, df)
 
 def check_status(txt_file):
+
     df_old = pd.read_pickle(txt_file)
-    #print(df_old)
-    #print("Checking Stocks Bought on " + df_old["Day Bought (Evening)"] + " Evening to sell on " + df_old["Day To Sell (Morning)"] + " morning...")
-    df_old['Total Order Amount'] = round(df_old['Price'] * df_old['Quantity'], 2)
-    total_investment = round(df_old['Total Order Amount'].sum(), 3)
-    expected_roi = round(.05 * total_investment, 2)
-    total_expected_end = round(total_investment + expected_roi, 2)
-    new_prices = []
+
+    current_prices = []
+    buy_prices = []
+    profits = []
+    percent_profits = []
+    total_investments = []
+    new_totals = []
     movement = []
-    magnitude = []
-    mag_percent = []
-    dollars_changed = []
+    # magnitudes = []
+
     for index, row in df_old.iterrows():
         symbol = row['Stock']
-        shares = float(row["Quantity"])
-        bought_price = float(row["Price"])
-        updated_price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
-        new_prices.append(updated_price)
-        result_dir = compare_prices(bought_price, updated_price)[0]
-        movement.append(result_dir)
-        result = compare_prices(bought_price, updated_price)[1]
-        magnitude.append(result)
-        percent = (result / bought_price) * 100
-        mag_percent.append(percent)
-        dollars = round(result * shares, 2)
-        dollars_changed.append(dollars)
-    df_old['New Price'] = new_prices
-    df_old['Movement'] = movement
-    df_old['How Much'] = magnitude
-    df_old["How Much %"] = mag_percent
-    df_old["Dollars Losed/Gained"] = dollars_changed
-    df_old['New Total Worth'] = round(df_old['New Price'] * df_old['Quantity'], 2)
-    t = time.localtime()
-    current_time = time.strftime("%H:%M:%S", t)
-    print("Time", current_time)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', None)
-    print("--------------------------------------------------------\n", df_old)
-    print()
-    print("Total Investment: ", total_investment)
-    print("Expected ROI (5%): ", expected_roi)
-    print("Total Expected End: ", total_expected_end)
-    sum_new = round(df_old['New Total Worth'].sum(), 3)
-    print("If sold now, you would have ", sum_new)
-    instant_profit = round(sum_new - total_investment, 2)
-    instant_ROI = round(instant_profit / total_investment, 4) * 100
-    print("Profit if all sold now:", instant_profit, "For an ROI of", round(instant_ROI, 4), "percent")
-    print("--------------------------------------------------------")
+        current_price, buy_price, shares, profit, percent_profit, total_investment, new_total = get_stock_info(symbol)
+
+        #magnitude = round((current_price - buy_price)  * 100)
+        #magnitudes.append(magnitude)
+        up_down = compare_prices(buy_price, current_price)[0]
+        movement.append(up_down)
+        current_prices.append(current_price)
+        buy_prices.append(buy_price)
+        profits.append(profit)
+        percent_profits.append(percent_profit)
+        total_investments.append(total_investment)
+        new_totals.append(new_total)
+
+    df_old['Current Price'] = current_prices
+    df_old["Buy Price"] = buy_prices
+    df_old["Profit"] = profits
+    df_old["% Profit"] = percent_profits
+    df_old['Total Investment'] = total_investments
+    df_old["New Total"] = new_totals
+    df_old['Up/Down'] = movement
+
+
+    total_profit = round(df_old['Profit'].sum(), 2)
+    total_investment_sum = round(df_old['Total Investment'].sum(), 2)
+    if int(total_profit) == 0:
+        return
+    else:
+        roi = round(total_profit / total_investment_sum, 4) * 100
+        sum_new = round(total_profit + total_investment_sum, 2)
+        print(df_old)
+        print()
+        print("Total Investment: ", total_investment_sum)
+        print("Total Profit: ", total_profit)
+        print("ROI: " + str(roi) + "%")
+        print("If sold now, you would have $" + str(sum_new))
+
+    # t = time.localtime()
+    # current_time = time.strftime("%H:%M:%S", t)
+    # print("Time", current_time)
+
+    print("\n--------------------------------------------------------")
 
 def buy():
     # import stocks buying and amount here. Parses Text file to automatically buy stock and quantity
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', None)
+
     what_day = input("What File do you want to read/save from? (1) or (2)")
     if what_day.lower() == "1":
         stock_file = open("stocks_to_buy.txt", "r")
     elif what_day.lower() == "2":
         stock_file = open("stocks_to_buy_2.txt", "r")
+
     stock_names = []
     stock_quantities = []
     stock_list = []
@@ -157,31 +188,39 @@ def buy():
         quantity = stock[1]
         full_name = robin_stocks.stocks.get_name_by_symbol(symbol)
         name_list.append(full_name)
-        price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
-        price_list.append(price)
-        #pred_profit = df_old.loc[df_old.Stock == symbol,'Predicted Profit'].tolist()[0]
+        order_price = float(robin_stocks.stocks.get_latest_price(symbol, includeExtendedHours=True)[0])
+        price_list.append(order_price)
+        # pred_profit = df_old.loc[df_old.Stock == symbol,'Predicted Profit'].tolist()[0]
         # print("pred Profit", pred_profit)
         #pred_profits.append(pred_profit)
-        tomorrow = date.today() + timedelta(1)
-        yesterday = date.today() - timedelta(1)
-        tomorrow_name = calendar.day_name[tomorrow.weekday()]
-        yesterday_name = calendar.day_name[yesterday.weekday()]
-        days.append(yesterday_name)
-        days2.append(tomorrow_name)
+        today = date.today()
+        two_days = date.today() + timedelta(2)
+        today_name = calendar.day_name[today.weekday()]
+        two_days_name = calendar.day_name[two_days.weekday()]
+        if today_name == "Thursday":
+            days.append(today_name)
+            days2.append("Monday")
+        elif today_name == "Friday":
+            days.append(today_name)
+            days2.append("Tuesday")
+        else:
+            days.append(today_name)
+            days2.append(two_days_name)
+
     df['Full Name'] = name_list
-    df['Price'] = price_list
+    df['Order Price'] = price_list
     df['Quantity'] = stock_quantities
 
     print("Entered Buy Mode.")
     print("Reading in Order from txt file...")
     print("Order Input:")
-    df['Total Order Amount'] = round(df['Price'] * df['Quantity'], 3)
+    df['Total Order Amount'] = round(df['Order Price'] * df['Quantity'], 3)
     total_investment = round(df['Total Order Amount'].sum(), 2)
     expected_roi = round(.05 * total_investment, 2)
     total_expected_end = round(total_investment + expected_roi, 2)
     df["% Order Makeup"] = round(((df["Total Order Amount"] / total_investment) * 100), 4)
 
-    df["Day Bought (Evening)"] = days
+    df["Order Placed (Evening)"] = days
     df["Day To Sell (Morning)"] = days2
     #df["Predicted Profit/Share"] = pred_profits
     #df["Predicted Profit Total"] = round(pred_profits * df['Quantity'], 3)
@@ -335,8 +374,14 @@ while to_end is False:
         #     tomorrow_name = "Tuesday"
         #     two_days_name = "Wednesday"
 
-        check_status("stocks_bought.txt")
-        check_status("stocks_bought2.txt")
+        what_day = input("What File do you want to check the status of? (1) or (2)")
+        if what_day.lower() == "1":
+            check_status("stocks_bought.txt")
+        elif what_day.lower() == "2":
+            check_status("stocks_bought2.txt")
+
+        #check_status("stocks_bought2.txt")
+
 
     # Run mode. Starts when the market opens and ends when it closes. Refreshed every 5 seconds
     elif mode == "r":
